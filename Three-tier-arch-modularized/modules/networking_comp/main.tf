@@ -16,41 +16,18 @@ resource "aws_vpc" "default" {
 #                                SUBNETS
 ###############################################################################
 
-resource "aws_subnet" "web" {
-  count             = "${length(var.web_subnets_cidr_blocks)}"
+resource "aws_subnet" "private" {
+  count             = "${length(var.private_subnets_cidr_blocks)}"
   vpc_id            = "${aws_vpc.default.id}"
   availability_zone = "${data.aws_availability_zones.available.names[count.index]}"
-  cidr_block        = "${var.web_subnets_cidr_blocks[count.index]}"
+  cidr_block        = "${var.private_subnets_cidr_blocks[count.index]}"
 
   tags = {
-    Name = "web-public-${count.index}"
+    Name = "private subnets"
   }
 
 }
 
-resource "aws_subnet" "app" {
-  count             = "${length(var.app_subnets_cidr_blocks)}"
-  vpc_id            = "${aws_vpc.default.id}"
-  availability_zone = "${data.aws_availability_zones.available.names[count.index]}"
-  cidr_block        = "${var.app_subnets_cidr_blocks[count.index]}"
-
-  tags = {
-    Name = "app-private-${count.index}"
-  }
-
-}
-
-resource "aws_subnet" "db" {
-  count             = "${length(var.public_subnets_cidr_blocks)}"
-  vpc_id            = "${aws_vpc.default.id}"
-  availability_zone = "${data.aws_availability_zones.available.names[count.index]}"
-  cidr_block        = "${var.db_subnets_cidr_blocks[count.index]}"
-
-  tags = {
-    Name = "db-private-${count.index}"
-  }
-
-}
 
 # Create public subnet for common resources like NAT Gateway etc.
 resource "aws_subnet" "public" {
@@ -101,29 +78,10 @@ resource "aws_route_table_association" "public" {
   route_table_id = "${aws_route_table.public.id}"
 }
 
-######################## Create Route tables for web layer######################
-resource "aws_route_table" "web" {
-  vpc_id = "${aws_vpc.default.id}"
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = "${aws_internet_gateway.default.id}"
-  }
+####################### Create Route tables for private layer######################
 
-  tags = {
-    Name = "Web"
-  }
-}
-
-resource "aws_route_table_association" "web" {
-  count          = "${length(var.web_subnets_cidr_blocks)}"
-  subnet_id      = "${element(aws_subnet.web.*.id, count.index)}"
-  route_table_id = "${aws_route_table.web.id}"
-}
-
-####################### Create Route tables for App layer######################
-
-resource "aws_route_table" "app" {
+resource "aws_route_table" "private" {
   vpc_id = "${aws_vpc.default.id}"
 
   route {
@@ -132,37 +90,15 @@ resource "aws_route_table" "app" {
   }
 
   tags = {
-    Name = "App"
+    Name = "private"
   }
 }
 
 resource "aws_route_table_association" "app" {
-  count          = "${length(var.app_subnets_cidr_blocks)}"
-  subnet_id      = "${element(aws_subnet.app.*.id, count.index)}"
-  route_table_id = "${aws_route_table.app.id}"
+  count          = "${length(var.private_subnets_cidr_blocks)}"
+  subnet_id      = "${element(aws_subnet.private.*.id, count.index)}"
+  route_table_id = "${aws_route_table.private.id}"
 }
-
-############################ Create Route tables for App layer#######################
-
-resource "aws_route_table" "db" {
-  vpc_id = "${aws_vpc.default.id}"
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = "${aws_nat_gateway.default.id}"
-  }
-
-  tags = {
-    Name = "DB"
-  }
-}
-
-resource "aws_route_table_association" "db" {
-  count          = "${length(var.db_subnets_cidr_blocks)}"
-  subnet_id      = "${element(aws_subnet.db.*.id, count.index)}"
-  route_table_id = "${aws_route_table.db.id}"
-}
-
 
 ##############################################################################
 #                            NAT GATWEWAY AND EIP
@@ -222,11 +158,11 @@ resource "aws_security_group" "webserver_sg" {
 # Create EC2 instances for webservers
 
 resource "aws_instance" "webservers" {
-  count           = "${length(var.web_subnets_cidr_blocks)}"
+  count           = "${length(var.public_subnets_cidr_blocks)}"
   ami             = "${var.web_ami}"
   instance_type   = "${var.web_instance}"
   security_groups = ["${aws_security_group.webserver_sg.id}"]
-  subnet_id       = "${element(aws_subnet.web.*.id,count.index)}"
+  subnet_id       = "${element(aws_subnet.public.*.id,count.index)}"
 
   tags = {
     Name = "${element(var.webserver_name,count.index)}"
@@ -243,7 +179,7 @@ resource "aws_lb" "weblb" {
   name               = "${var.lb_name}"
   load_balancer_type = "application"
   security_groups    = ["${aws_security_group.webserver_sg.id}"]
-  subnets            = "${aws_subnet.web.*.id}"
+  subnets            = "${aws_subnet.public.*.id}"
 
   tags = {
     Name = "${var.lb_name}"
