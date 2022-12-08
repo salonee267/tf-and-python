@@ -11,7 +11,8 @@ module "aws_vpc" {
 
 module "aws_db_instance" {
   source = "./modules/rds"
-  private_subnets = var.private_subnets
+#   private_subnets = var.private_subnets
+  private_subnet = module.aws_vpc.private_subnets
 }
 
 
