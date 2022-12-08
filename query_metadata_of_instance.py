@@ -5,8 +5,8 @@ import json
 def get_ec2_client(region):
     return boto3.client(
     'ec2',region_name=region,
-    aws_access_key_id='AKIAZMO222HBGCPYBRB4',
-    aws_secret_access_key='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',
+    aws_access_key_id='$#$',
+    aws_secret_access_key='$#$',
     )
 
 def get_complete_metadata(region):
